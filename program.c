@@ -172,15 +172,17 @@ void set_address(long address) {
   char low_byte = address & 0xFF;
   char mid_three_bits = (address >> 8) & 0x07;
   // Could probably shift ROM_A8_10_SHIFT less here.
-  char high_byte = (address >> 8) & 0xFF;
+  char high_byte = (address >> 11) & 0xFF;
 
   shift(high_byte, low_byte);
   set_a8_10(mid_three_bits);
 }
 
-// All the flash commands involve writing bytes to inverting addresses (0x555 and 0x2AA)
-// This is a bit of a hack to speed up the write process by shifting only one address bit per instruction.
-void shift_command_3(char first, char second, char third) {
+// All the flash commands involve writing bytes to inverting addresses (0x555
+// and 0x2AA)
+// This is a bit of a hack to speed up the write process by shifting only one
+// address bit per instruction.
+void shift_command(char command_byte) {
   // Disable output and write (active low)
   ROM_OUTPUT_ENABLE_PORT |= _BV(ROM_OUTPUT_ENABLE_BIT);
   ROM_WRITE_ENABLE_PORT |= _BV(ROM_WRITE_ENABLE_BIT);
@@ -189,28 +191,29 @@ void shift_command_3(char first, char second, char third) {
 
   shift_low_with_next_byte(0x55, 0xAA); // low sreg = 0x55
   set_a8_10(0x05);
-  ROM_DATA_PORT = first;
+  ROM_DATA_PORT = 0xAA;
   ROM_WRITE_ENABLE_PORT &= ~_BV(ROM_WRITE_ENABLE_BIT);
   ROM_WRITE_ENABLE_PORT |= _BV(ROM_WRITE_ENABLE_BIT);
 
   shift_clock_with_next_low(0x55);  // low sreg = 0xAA
   set_a8_10(0x02);
-  ROM_DATA_PORT = second;
+  ROM_DATA_PORT = 0x55;
   ROM_WRITE_ENABLE_PORT &= ~_BV(ROM_WRITE_ENABLE_BIT);
   ROM_WRITE_ENABLE_PORT |= _BV(ROM_WRITE_ENABLE_BIT);
 
   shift_clock_with_next_low(0xAA);  // low sreg = 0x55
   set_a8_10(0x05);
-  ROM_DATA_PORT = third;
+  ROM_DATA_PORT = command_byte;
   ROM_WRITE_ENABLE_PORT &= ~_BV(ROM_WRITE_ENABLE_BIT);
   ROM_WRITE_ENABLE_PORT |= _BV(ROM_WRITE_ENABLE_BIT);
 }
 
 void write_at_address(long address, char byte) {
-  // This command already disables output and write and sets the data reg to output.
   char check;
   do {
-    shift_command_3(0xAA, 0x55, 0xA0);
+    // This command already disables output and write and sets the data reg to
+    // output.
+    shift_command(0xA0);
     set_address(address);
     ROM_DATA_PORT = byte;
     ROM_WRITE_ENABLE_PORT &= ~_BV(ROM_WRITE_ENABLE_BIT);
@@ -222,9 +225,9 @@ void write_at_address(long address, char byte) {
 }
 
 void chip_erase() {
-  shift_command_3(0xAA, 0x55, 0x80);
+  shift_command(0x80);
   // The second set of commands starts over at address 555
-  shift_command_3(0xAA, 0x55, 0x10);
+  shift_command(0x10);
 
   usart_write('.');
   wait1();
@@ -261,31 +264,44 @@ void dump_rom() {
   }
 }
 
+void write_rom() {
+  long address = 0;
+  for (; address < CHIP_SIZE; ++address) {
+    write_at_address(address, usart_read());
+  }
+}
+
 int main(void) {
   usart_init();
   init_pins();
+
+  //ROM_DATA_DIR = 0xFF;
   while (1) {
+    // TODO: Check to see if OUTPUT_ENABLE and WRITE_ENABLE are working as intended.
+    /*
+    long address = 0x11111;
+    char data = 0x11;
+    for (int i = 0; i < 4; ++i) {
+      set_address(address);
+      ROM_DATA_PORT = data;
+      wait1();
+      address <<= 1;
+      data <<= 1;
+    }
+    */
     char c = usart_read();
     usart_write_str(cmd_str);
     if (c == cmd_clear) {
       usart_write(cmd_clear);
-      //chip_erase();
+      chip_erase();
     } else if (c == cmd_write) {
       usart_write(cmd_write);
+      write_rom();
     } else if (c == cmd_dump) {
       usart_write(cmd_dump);
       dump_rom();
     } else {
       usart_write_str(error_str);
     }
-    /*
-    shift(c);
-    if (c & 1) {
-      PORTB &= ~_BV(PB0);
-    } else {
-      PORTB |= _BV(PB0);
-    }
-    usart_write(c);
-    */
   }
 }
