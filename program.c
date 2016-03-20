@@ -189,19 +189,19 @@ void shift_command(char command_byte) {
   // Set data register to output
   ROM_DATA_DIR = 0xFF;
 
-  shift_low_with_next_byte(0x55, 0xAA); // low sreg = 0x55
+  shift_low_with_next_byte(0x55, 0x00); // low sreg = 0x55, next bit = 0
   set_a8_10(0x05);
   ROM_DATA_PORT = 0xAA;
   ROM_WRITE_ENABLE_PORT &= ~_BV(ROM_WRITE_ENABLE_BIT);
   ROM_WRITE_ENABLE_PORT |= _BV(ROM_WRITE_ENABLE_BIT);
 
-  shift_clock_with_next_low(0x55);  // low sreg = 0xAA
+  shift_clock_with_next_low(0xFF);  // low sreg = 0xAA, next bit = 1
   set_a8_10(0x02);
   ROM_DATA_PORT = 0x55;
   ROM_WRITE_ENABLE_PORT &= ~_BV(ROM_WRITE_ENABLE_BIT);
   ROM_WRITE_ENABLE_PORT |= _BV(ROM_WRITE_ENABLE_BIT);
 
-  shift_clock_with_next_low(0xAA);  // low sreg = 0x55
+  shift_clock_with_next_low(0x00);  // low sreg = 0x55, next bit = 0
   set_a8_10(0x05);
   ROM_DATA_PORT = command_byte;
   ROM_WRITE_ENABLE_PORT &= ~_BV(ROM_WRITE_ENABLE_BIT);

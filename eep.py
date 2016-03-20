@@ -3,6 +3,7 @@
 import serial
 import argparse
 import math
+import sys
 
 CHIP_SIZE = 0x40000
 
@@ -71,4 +72,5 @@ elif args.f != None:
             check = ser.read(1)
     f.close()
 while True:
-    print(ser.readline(10).decode('utf-8'))
+    sys.stdout.write(ser.read(1).decode('utf-8'))
+    sys.stdout.flush()
