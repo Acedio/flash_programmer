@@ -1,14 +1,16 @@
 #include <avr/io.h>
 #include <avr/sfr_defs.h>
+
 #define F_CPU 8000000UL
 #define BAUD   250000UL
 #include <util/setbaud.h>
+
+#define CHIP_SIZE 0x40000
 
 const char cmd_clear = 'c';
 const char cmd_write = 'w';
 const char cmd_dump = 'd';
 const char* error_str = "error";
-const char* ack_str = "eepeepack";
 const char* cmd_str = "eepeepcmd";
 
 #define SREG_CLK_DIR DDRA
@@ -40,8 +42,6 @@ const char* cmd_str = "eepeepcmd";
 #define ROM_WRITE_ENABLE_DIR DDRD
 #define ROM_WRITE_ENABLE_PORT PORTD
 #define ROM_WRITE_ENABLE_BIT PORTD3
-
-#define CHIP_SIZE 0x40000
 
 void usart_init() {
   UBRRH = UBRRH_VALUE;
@@ -120,12 +120,12 @@ void shift(char high_byte, char low_byte) {
 }
 
 // Clocks the shift registers once. The last bit shifted will be output and
-// the MSB of low_next_byte will be loaded into low sreg.
+// the MSB of low_next_bit will be loaded into low sreg.
 // High sreg is kept at 0.
-void shift_clock_with_next_low(char low_next_byte) {
+void shift_clock_with_next_low(char low_next_bit) {
   // clk low
   SREG_CLK_PORT &= ~_BV(SREG_CLK_BIT);
-  if (low_next_byte & 0x80) {
+  if (low_next_bit & 0x80) {
     LOW_SREG_DATA_PORT |= _BV(LOW_SREG_DATA_BIT);
   } else {
     LOW_SREG_DATA_PORT &= ~_BV(LOW_SREG_DATA_BIT);
@@ -137,9 +137,9 @@ void shift_clock_with_next_low(char low_next_byte) {
 }
 
 // Shifts low_byte into the low shift register.
-// The MSB of low_next_byte is shifted into the low sreg and will be shifted
+// The MSB of low_next_bit is shifted into the low sreg and will be shifted
 // out on the next clock. High sreg is kept at 0x00.
-void shift_low_with_next_byte(char low_byte, char low_next_byte) {
+void shift_low_with_next_bit(char low_byte, char low_next_bit) {
   // High sreg is kept at 0.
   HIGH_SREG_DATA_PORT &= ~_BV(HIGH_SREG_DATA_BIT);
 
@@ -156,10 +156,8 @@ void shift_low_with_next_byte(char low_byte, char low_next_byte) {
     SREG_CLK_PORT |= _BV(SREG_CLK_BIT);
     low_byte <<= 1;
   }
-  // ♪♫ One last shift, just like the good old times. ♪♫
-  // Clocking shifts the /last/ state of the shift register into the output
-  // register. We shift the next bit here.
-  shift_clock_with_next_low(low_next_byte);
+  // Shift the next bit.
+  shift_clock_with_next_low(low_next_bit);
 }
 
 // Sets address bits 8-10 to the lowest three bits of three_bits.
@@ -189,7 +187,7 @@ void shift_command(char command_byte) {
   // Set data register to output
   ROM_DATA_DIR = 0xFF;
 
-  shift_low_with_next_byte(0x55, 0x00); // low sreg = 0x55, next bit = 0
+  shift_low_with_next_bit(0x55, 0x00); // low sreg = 0x55, next bit = 0
   set_a8_10(0x05);
   ROM_DATA_PORT = 0xAA;
   ROM_WRITE_ENABLE_PORT &= ~_BV(ROM_WRITE_ENABLE_BIT);
@@ -237,19 +235,6 @@ void chip_erase() {
   wait1();
 }
 
-/*
-char to_hex(unsigned char nibble) {
-  if (nibble < 10) {
-    return '0' + nibble;
-  }
-  return 'A' + nibble - 10;
-}
-
-void write_hex(unsigned char byte) {
-  usart_write(to_hex(byte >> 4));
-  usart_write(to_hex(byte & 0x0F));
-}*/
-
 void dump_rom() {
   // Disable write
   ROM_WRITE_ENABLE_PORT |= _BV(ROM_WRITE_ENABLE_BIT);
@@ -275,20 +260,7 @@ int main(void) {
   usart_init();
   init_pins();
 
-  //ROM_DATA_DIR = 0xFF;
   while (1) {
-    // TODO: Check to see if OUTPUT_ENABLE and WRITE_ENABLE are working as intended.
-    /*
-    long address = 0x11111;
-    char data = 0x11;
-    for (int i = 0; i < 4; ++i) {
-      set_address(address);
-      ROM_DATA_PORT = data;
-      wait1();
-      address <<= 1;
-      data <<= 1;
-    }
-    */
     char c = usart_read();
     usart_write_str(cmd_str);
     if (c == cmd_clear) {

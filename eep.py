@@ -5,13 +5,14 @@ import argparse
 import math
 import sys
 
-CHIP_SIZE = 0x40000
-
-parser = argparse.ArgumentParser(description='Interact with the eeprom.')
+parser = argparse.ArgumentParser(description='Interact with the flash programmer.')
+parser.add_argument('-b', default=250000, help="Set the baud rate used for communicating with the programmer. Default: 250000.")
+parser.add_argument('-c', default=0x40000, help="Set the ROM size, in bytes. Default: 0x40000 (256KiB)")
+parser.add_argument('-s', default="/dev/ttyUSB0", help="Set the serial port to use for communicating with the programmer. Default: /dev/ttyUSB0")
 reqd = parser.add_mutually_exclusive_group(required=True)
-reqd.add_argument('--clear', action='store_true')
-reqd.add_argument('-d')
-reqd.add_argument('-f')
+reqd.add_argument('--clear', action='store_true', help="Clear the ROM, resetting all bytes to 0xFF to prepare for writing.")
+reqd.add_argument('-d', help="Dump the ROM's contents to the given file.")
+reqd.add_argument('-f', help="Write the given file's contents to the ROM. The ROM should be --clear'd beforehand.")
 args = parser.parse_args()
 
 def strPreProc(text):
@@ -38,13 +39,13 @@ def waitText(s,text):
                 break
         matched += 1
 
-ser = serial.Serial("/dev/ttyUSB0", 250000)
+ser = serial.Serial(args.s, args.b)
 
 print('ちょっと待ってください…')
+# Poke it to see if it's alive.
 ser.write(b'a')
 waitText(ser, b'eepeepcmderror')
 print("よかった!")
-#ser.write(b'eepeepack')
 
 if args.clear:
     ser.write(b'c')
@@ -52,23 +53,23 @@ elif args.d != None:
     f = open(args.d, 'wb')
     ser.write(b'd')
     waitText(ser,b'eepeepcmdd')
-    for i in range(math.floor(CHIP_SIZE/256)):
+    for i in range(math.floor(args.c/256)):
         line = ser.read(256)
         print('line ' + hex(i*256))
         f.write(line)
-        #print(line)
     f.close()
 elif args.f != None:
     f = open(args.f, 'rb')
     ser.write(b'w')
     waitText(ser,b'eepeepcmdw')
-    for i in range(CHIP_SIZE):
+    for i in range(args.c):
         data = f.read(1)
         ser.write(data)
         check = ser.read(1)
-        print(hex(i))
+        if i % 0x1000 == 0:
+            print(hex(i))
         while check != data:
-            print('Failed.')
+            print('Write to ', hex(i), ' failed. Waiting for correction.')
             check = ser.read(1)
     f.close()
 while True:
