@@ -234,6 +234,7 @@ void chip_erase() {
   wait1();
 }
 
+/*
 char to_hex(unsigned char nibble) {
   if (nibble < 10) {
     return '0' + nibble;
@@ -244,18 +245,18 @@ char to_hex(unsigned char nibble) {
 void write_hex(unsigned char byte) {
   usart_write(to_hex(byte >> 4));
   usart_write(to_hex(byte & 0x0F));
-}
+}*/
 
 void dump_rom() {
   // Disable write
   ROM_WRITE_ENABLE_PORT |= _BV(ROM_WRITE_ENABLE_BIT);
+  // Enable output
   ROM_OUTPUT_ENABLE_PORT &= ~_BV(ROM_OUTPUT_ENABLE_BIT);
   // Set data to read
   ROM_DATA_DIR = 0x00;
   long address = 0;
   for (; address < CHIP_SIZE; ++address) {
     set_address(address);
-    //write_hex(ROM_DATA_PIN);
     usart_write(ROM_DATA_PIN);
   }
 }
